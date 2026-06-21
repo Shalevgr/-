@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>שיבוץ תורני מטבח</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAF6F0;
+    --surface:#FFFFFF;
+    --surface-alt:#F2EAE0;
+    --ink:#2B2420;
+    --ink-muted:#8A7E72;
+    --accent:#C1502E;
+    --accent-dark:#9C3E22;
+    --accent-soft:#F1D9C9;
+    --confirm:#6B8F71;
+    --confirm-dark:#4F6B54;
+    --confirm-soft:#E3EBE0;
+    --danger:#B2453A;
+    --danger-soft:#F3DEDB;
+    --border:#E4DACB;
+    --radius:14px;
+    --radius-sm:9px;
+    --shadow:0 4px 16px rgba(43,36,32,0.10);
+    --shadow-lg:0 12px 40px rgba(43,36,32,0.22);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Heebo',Arial,sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size:64px 64px;
+    opacity:0.25;
+    pointer-events:none;
+    z-index:0;
+  }
+  h1,h2,h3,.serif{font-family:'Frank Ruhl Libre',Georgia,serif;}
+  button{font-family:inherit;cursor:pointer;}
+  input{font-family:inherit;}
+  #app-root{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;}
+
+  /* ---------- generic ---------- */
+  .btn{
+    border:none;border-radius:999px;padding:10px 20px;font-size:14px;font-weight:600;
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease; display:inline-flex; align-items:center; gap:6px;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:var(--accent-dark);}
+  .btn-primary:disabled{background:#cdbfae;cursor:not-allowed;}
+  .btn-ghost{background:transparent;color:var(--ink);border:1.5px solid var(--border);}
+  .btn-ghost:hover{border-color:var(--ink-muted);}
+  .btn-confirm{background:var(--confirm);color:#fff;}
+  .btn-confirm:hover{background:var(--confirm-dark);}
+  .btn-danger{background:transparent;color:var(--danger);border:1.5px solid var(--danger-soft);}
+  .btn-danger:hover{background:var(--danger-soft);}
+  .btn-sm{padding:6px 13px;font-size:12.5px;}
+  .pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:600;}
+  .pill-confirm{background:var(--confirm-soft);color:var(--confirm-dark);}
+  .pill-wait{background:var(--accent-soft);color:var(--accent-dark);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);}
+  .field-label{font-size:13px;font-weight:600;color:var(--ink-muted);margin-bottom:6px;display:block;}
+  .text-input{
+    width:100%;padding:12px 14px;border-radius:var(--radius-sm);border:1.5px solid var(--border);
+    background:var(--surface);color:var(--ink);font-size:15px;outline:none;transition:border-color .15s;
+  }
+  .text-input:focus{border-color:var(--accent);}
+  .muted{color:var(--ink-muted);}
+  .error-text{color:var(--danger);font-size:13.5px;margin-top:6px;}
+  .center-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;position:relative;z-index:1;}
+  .spinner{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
+
+  /* ---------- auth screens ---------- */
+  .auth-card{width:100%;max-width:420px;padding:38px 32px;}
+  .auth-eyebrow{font-size:12.5px;letter-spacing:.08em;color:var(--accent-dark);font-weight:700;margin-bottom:6px;}
+  .auth-title{font-size:28px;margin:0 0 6px;}
+  .auth-sub{color:var(--ink-muted);font-size:14.5px;margin:0 0 26px;line-height:1.6;}
+  .auth-field{margin-bottom:16px;}
+
+  /* ---------- header ---------- */
+  header.app-header{
+    background:var(--surface);border-bottom:1px solid var(--border);
+    padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:30;
+  }
+  .brand{display:flex;flex-direction:column;gap:1px;}
+  .brand-title{font-size:19px;font-weight:700;}
+  .brand-sub{font-size:11.5px;color:var(--ink-muted);}
+  .header-search{flex:1;min-width:160px;max-width:340px;position:relative;}
+  .header-search input{
+    width:100%;padding:9px 14px;border-radius:999px;border:1.5px solid var(--border);
+    background:var(--surface-alt);font-size:13.5px;outline:none;
+  }
+  .header-search input:focus{border-color:var(--accent);}
+  .header-actions{display:flex;align-items:center;gap:10px;margin-right:auto;}
+  .header-user{font-size:13px;color:var(--ink-muted);}
+  .header-user b{color:var(--ink);}
+  .admin-tag{background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 8px;margin-right:6px;}
+
+  .search-results-panel{
+    position:absolute;top:calc(100% + 8px);right:0;left:0;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);
+    max-height:340px;overflow:auto;z-index:40;
+  }
+  .search-results-panel .sr-item{padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13.5px;}
+  .search-results-panel .sr-item:last-child{border-bottom:none;}
+  .search-results-panel .sr-item:hover{background:var(--surface-alt);}
+  .search-empty{padding:14px;font-size:13px;color:var(--ink-muted);}
+  .search-dates{padding:6px 0;}
+  .search-dates .sd-row{display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--border);font-size:13px;}
+  .search-dates .sd-row:last-child{border-bottom:none;}
+  .search-back{padding:10px 14px;font-size:12.5px;color:var(--accent-dark);font-weight:600;cursor:pointer;border-bottom:1px solid var(--border);}
+
+  /* ---------- banners ---------- */
+  .banner-wrap{padding:12px 20px 0;display:flex;flex-direction:column;gap:8px;position:relative;z-index:1;}
+  .banner{
+    border-radius:var(--radius-sm);padding:12px 16px;font-size:13.5px;display:flex;align-items:center;
+    justify-content:space-between;gap:12px;border:1px solid var(--accent-soft);background:var(--accent-soft);color:var(--accent-dark);
+  }
+  .banner b{font-weight:700;}
+  .banner button{background:none;border:none;color:inherit;font-size:16px;opacity:.6;line-height:1;}
+  .banner button:hover{opacity:1;}
+
+  /* ---------- main layout ---------- */
+  main.app-main{max-width:980px;margin:0 auto;padding:22px 20px 60px;width:100%;position:relative;z-index:1;flex:1;}
+  .month-nav{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:18px;}
+  .month-nav button{
+    width:36px;height:36px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface);
+    color:var(--ink);font-size:16px;display:flex;align-items:center;justify-content:center;
+  }
+  .month-nav button:hover{border-color:var(--accent);color:var(--accent);}
+  .month-label{text-align:center;}
+  .month-label .g-month{font-size:22px;font-weight:700;}
+  .month-label .h-month{font-size:13px;color:var(--ink-muted);}
+  .today-btn{font-size:12px;color:var(--accent-dark);font-weight:600;background:none;border:none;text-decoration:underline;text-underline-offset:3px;}
+
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  .cal-weekday{text-align:center;font-size:11.5px;font-weight:700;color:var(--ink-muted);padding-bottom:4px;}
+  .cal-cell{
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;min-height:88px;
+    padding:7px 6px;display:flex;flex-direction:column;gap:5px;cursor:pointer;transition:box-shadow .15s, border-color .15s;
+    position:relative;
+  }
+  .cal-cell:hover{box-shadow:var(--shadow);border-color:#d8c9b3;}
+  .cal-cell.empty{background:transparent;border-color:transparent;cursor:default;box-shadow:none;}
+  .cal-cell.today{border-color:var(--accent);border-width:2px;}
+  .cal-cell .g-day{font-size:15px;font-weight:700;}
+  .cal-cell.today .g-day{color:var(--accent-dark);}
+  .cal-cell .h-day{font-size:10.5px;color:var(--ink-muted);line-height:1.3;}
+  .cal-cell .chips{display:flex;flex-direction:column;gap:3px;margin-top:auto;}
+  .chip{
+    background:var(--confirm-soft);color:var(--confirm-dark);font-size:10.5px;font-weight:600;border-radius:5px;
+    padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    border-right:2px dashed #fff;
+  }
+  .chip-more{font-size:10px;color:var(--ink-muted);font-weight:600;}
+
+  @media (max-width:640px){
+    .cal-cell{min-height:64px;padding:5px 4px;}
+    .cal-cell .g-day{font-size:13px;}
+    .cal-cell .h-day{font-size:9px;}
+    .chip{font-size:9px;}
+    .cal-grid{gap:4px;}
+  }
+
+  /* ---------- modal ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(43,36,32,0.45);display:flex;align-items:center;justify-content:center;
+    z-index:100;padding:18px;
+  }
+  .modal-box{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-lg);width:100%;max-width:440px;max-height:88vh;overflow:auto;}
+  .modal-head{padding:20px 22px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;}
+  .modal-head .g-date{font-size:18px;font-weight:700;}
+  .modal-head .h-date{font-size:13px;color:var(--ink-muted);margin-top:3px;}
+  .modal-close{background:none;border:none;font-size:20px;color:var(--ink-muted);line-height:1;padding:4px;}
+  .modal-close:hover{color:var(--ink);}
+  .modal-body{padding:18px 22px 22px;}
+  .assigned-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;}
+  .assigned-row{
+    display:flex;align-items:center;justify-content:space-between;background:var(--surface-alt);
+    border-radius:var(--radius-sm);padding:9px 13px;font-size:14px;
+  }
+  .assigned-row .remove-x{background:none;border:none;color:var(--danger);font-size:15px;padding:2px 6px;}
+  .empty-note{font-size:13.5px;color:var(--ink-muted);background:var(--surface-alt);border-radius:var(--radius-sm);padding:14px;text-align:center;}
+  .assign-box{position:relative;margin-top:6px;}
+  .suggestions{
+    position:absolute;top:calc(100% + 5px);right:0;left:0;background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);max-height:220px;overflow:auto;z-index:10;
+  }
+  .suggestion-item{padding:10px 14px;font-size:14px;cursor:pointer;}
+  .suggestion-item:hover{background:var(--surface-alt);}
+  .suggestion-empty{padding:12px 14px;font-size:13px;color:var(--ink-muted);}
+
+  /* ---------- admin panel ---------- */
+  .admin-overlay{position:fixed;inset:0;background:rgba(43,36,32,0.45);z-index:100;display:flex;justify-content:flex-end;}
+  .admin-panel{background:var(--surface);width:100%;max-width:460px;height:100%;overflow:auto;box-shadow:var(--shadow-lg);}
+  .admin-head{padding:20px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);z-index:5;}
+  .admin-head h2{margin:0;font-size:20px;}
+  .admin-section{padding:18px 22px;border-bottom:1px solid var(--border);}
+  .admin-section h3{font-size:14px;margin:0 0 12px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em;}
+  .admin-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);
+  }
+  .admin-row:last-child{border-bottom:none;}
+  .admin-row .name{font-weight:600;font-size:14px;}
+  .admin-row .phone{font-size:12px;color:var(--ink-muted);}
+  .admin-row-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
+  .toggle-wrap{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-muted);}
+  .add-form{display:flex;flex-direction:column;gap:10px;}
+  .add-form .row2{display:flex;gap:8px;}
+  .empty-note-sm{font-size:12.5px;color:var(--ink-muted);padding:6px 0;}
+
+  /* ---------- config screen ---------- */
+  .config-steps{text-align:right;font-size:13.5px;line-height:1.9;color:var(--ink);background:var(--surface-alt);border-radius:var(--radius-sm);padding:16px 18px;margin-top:18px;}
+  .config-steps code{background:#fff;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12px;direction:ltr;display:inline-block;}
+
+  footer.app-footer{text-align:center;padding:20px;font-size:11.5px;color:var(--ink-muted);position:relative;z-index:1;}
+</style>
+</head>
+<body>
+<div id="app-root"></div>
+<footer class="app-footer">שיבוץ תורני מטבח</footer>
+<script>
+/* =========================================================================
+   הגדרות חיבור למסד הנתונים (Supabase)
+   יש למלא כאן את הפרטים מהפרויקט שלך ב-Supabase לפני השימוש באפליקציה.
+   ========================================================================= */
+const SUPABASE_URL = 'sb_publishable_FX8-szZIFfeJxCOz0IAMAQ_O4Cckx3u';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjeWl6emFwcGl5emNteGNnb3h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDY3OTYsImV4cCI6MjA5NzYyMjc5Nn0.dQjdwU2ry50e5ruGZjEcrXRVJnwXR95qnNChLPnkt7o';
+const IS_CONFIGURED = !SUPABASE_URL.includes('YOUR_') && !SUPABASE_ANON_KEY.includes('YOUR_');
+
+/* =========================================================================
+   קריאות למסד הנתונים (Supabase REST API, ללא ספריות חיצוניות)
+   ========================================================================= */
+async function sb(path, options) {
+  options = options || {};
+  const headers = Object.assign({
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': options.prefer || 'return=representation'
+  }, options.headers || {});
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    method: options.method || 'GET',
+    headers: headers,
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  if (!res.ok) {
+    let msg = 'שגיאת תקשורת (' + res.status + ')';
+    try { const j = await res.json(); if (j && j.message) msg = j.message; } catch(e) {}
+    throw new Error(msg);
+  }
+  if (res.status === 204) return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+const api = {
+  getAllToranim: () => sb('toranim?select=*&order=name.asc'),
+  getToranByPhone: (phone) => sb('toranim?select=*&phone=eq.' + encodeURIComponent(phone)).then(r => r && r[0]),
+  insertToran: (data) => sb('toranim', { method: 'POST', body: data }).then(r => r && r[0]),
+  updateToran: (id, data) => sb('toranim?id=eq.' + id, { method: 'PATCH', body: data }).then(r => r && r[0]),
+  getAssignmentsRange: (startYmd, endYmd) => sb('assignments?select=id,date,toran_id,created_at,toranim(id,name,phone)&date=gte.' + startYmd + '&date=lte.' + endYmd + '&order=date.asc'),
+  getAssignmentsForToran: (toranId, fromYmd) => sb('assignments?select=id,date,created_at&toran_id=eq.' + toranId + (fromYmd ? '&date=gte.' + fromYmd : '') + '&order=date.asc'),
+  insertAssignment: (date, toranId) => sb('assignments', { method: 'POST', body: { date: date, toran_id: toranId } }).then(r => r && r[0]),
+  deleteAssignment: (id) => sb('assignments?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }),
+  countToranim: () => sb('toranim?select=id', { headers: { 'Prefer': 'count=exact' } })
+};
+
+/* =========================================================================
+   לוח עברי — המרת תאריכים (אלגוריתם Dershowitz–Reingold)
+   ========================================================================= */
+function mod(a, b) { return a - b * Math.floor(a / b); }
+const HEBREW_EPOCH = -1373427;
+
+function gregorianLeapYear(year) {
+  return (year % 4 === 0) && (year % 100 !== 0 || year % 400 === 0);
+}
+function gregorianToRD(year, month, day) {
+  let days = 365 * (year - 1) + Math.floor((year - 1) / 4) - Math.floor((year - 1) / 100) + Math.floor((year - 1) / 400);
+  const cumDays = [0,31,59,90,120,151,181,212,243,273,304,334];
+  days += cumDays[month - 1];
+  if (month > 2 && gregorianLeapYear(year)) days += 1;
+  days += day;
+  return days;
+}
+function hebrewLeapYear(year) { return mod(7 * year + 1, 19) < 7; }
+function lastMonthOfHebrewYear(year) { return hebrewLeapYear(year) ? 13 : 12; }
+function hebrewCalendarElapsedDays(year) {
+  const monthsElapsed = Math.floor((235 * year - 234) / 19);
+  const partsElapsed = 12084 + 13753 * monthsElapsed;
+  let day = monthsElapsed * 29 + Math.floor(partsElapsed / 25920);
+  if (mod(3 * (day + 1), 7) < 3) day += 1;
+  return day;
+}
+function hebrewYearLength(year) { return hebrewCalendarElapsedDays(year + 1) - hebrewCalendarElapsedDays(year); }
+function cheshvanLong(year) { return hebrewYearLength(year) % 10 === 5; }
+function kislevShort(year) { return hebrewYearLength(year) % 10 === 3; }
+function hebrewMonthLength(year, month) {
+  if (month === 2 || month === 4 || month === 6 || month === 10 || month === 13) return 29;
+  if (month === 12 && !hebrewLeapYear(year)) return 29;
+  if (month === 12 && hebrewLeapYear(year)) return 30;
+  if (month === 8) return cheshvanLong(year) ? 30 : 29;
+  if (month === 9) return kislevShort(year) ? 29 : 30;
+  return 30;
+}
+function rdToHebrew(rd) {
+  let year = Math.floor((rd - HEBREW_EPOCH) / 366) + 1;
+  while (HEBREW_EPOCH + hebrewCalendarElapsedDays(year + 1) <= rd) year++;
+  while (HEBREW_EPOCH + hebrewCalendarElapsedDays(year) > rd) year--;
+  const start = HEBREW_EPOCH + hebrewCalendarElapsedDays(year);
+  let remaining = rd - start + 1;
+  const monthOrder = hebrewLeapYear(year) ? [7,8,9,10,11,12,13,1,2,3,4,5,6] : [7,8,9,10,11,12,1,2,3,4,5,6];
+  let month, day;
+  for (const m of monthOrder) {
+    const len = hebrewMonthLength(year, m);
+    if (remaining <= len) { month = m; day = remaining; break; }
+    remaining -= len;
+  }
+  return { year: year, month: month, day: day };
+}
+function gregorianToHebrew(y, m, d) { return rdToHebrew(gregorianToRD(y, m, d)); }
+
+const HEBREW_MONTH_NAMES = {1:'ניסן',2:'אייר',3:'סיון',4:'תמוז',5:'אב',6:'אלול',7:'תשרי',8:'חשון',9:'כסלו',10:'טבת',11:'שבט',12:'אדר',13:"אדר ב׳"};
+function hebrewMonthName(year, month) {
+  if (month === 12 && hebrewLeapYear(year)) return "אדר א׳";
+  return HEBREW_MONTH_NAMES[month];
+}
+function hebrewGematria(num) {
+  const hundreds = {400:'ת',300:'ש',200:'ר',100:'ק'};
+  const tensMap = {90:'צ',80:'פ',70:'ע',60:'ס',50:'נ',40:'מ',30:'ל',20:'כ',10:'י'};
+  const onesMap = {9:'ט',8:'ח',7:'ז',6:'ו',5:'ה',4:'ד',3:'ג',2:'ב',1:'א'};
+  let n = num, letters = '';
+  while (n >= 400) { letters += 'ת'; n -= 400; }
+  if (n >= 100) { const h = Math.floor(n/100)*100; letters += hundreds[h]; n -= h; }
+  if (n === 15) { letters += 'טו'; n = 0; }
+  else if (n === 16) { letters += 'טז'; n = 0; }
+  else {
+    if (n >= 10) { const t = Math.floor(n/10)*10; letters += tensMap[t]; n -= t; }
+    if (n >= 1) letters += onesMap[n];
+  }
+  if (letters.length === 0) return '';
+  if (letters.length === 1) return letters + '׳';
+  return letters.slice(0, -1) + '״' + letters.slice(-1);
+}
+
+/* =========================================================================
+   כלי תאריכים כלליים
+   ========================================================================= */
+function pad2(n) { return String(n).padStart(2, '0'); }
+function ymd(y, m, d) { return y + '-' + pad2(m) + '-' + pad2(d); }
+function todayYMD() { const t = new Date(); return ymd(t.getFullYear(), t.getMonth() + 1, t.getDate()); }
+function daysBetween(a, b) {
+  const d1 = new Date(a + 'T00:00:00'), d2 = new Date(b + 'T00:00:00');
+  return Math.round((d2 - d1) / 86400000);
+}
+function daysInGregMonth(y, m) { return new Date(y, m, 0).getDate(); }
+function firstWeekdayOfMonth(y, m) { return new Date(y, m - 1, 1).getDay(); }
+
+const GREG_MONTH_NAMES = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+const WEEKDAY_SHORT = ['א','ב','ג','ד','ה','ו','ש'];
+const WEEKDAY_FULL = ['יום ראשון','יום שני','יום שלישי','יום רביעי','יום חמישי','יום שישי','שבת'];
+
+function formatGregFull(ymdStr) {
+  const p = ymdStr.split('-').map(Number), y=p[0], m=p[1], d=p[2];
+  const wd = new Date(y, m-1, d).getDay();
+  return WEEKDAY_FULL[wd] + ', ' + d + ' ב' + GREG_MONTH_NAMES[m-1] + ' ' + y;
+}
+function formatHebFull(ymdStr) {
+  const p = ymdStr.split('-').map(Number), y=p[0], m=p[1], d=p[2];
+  const h = gregorianToHebrew(y,m,d);
+  return hebrewGematria(h.day) + ' ב' + hebrewMonthName(h.year, h.month) + ' ' + hebrewGematria(h.year % 1000);
+}
+function normalizePhone(raw) {
+  let d = (raw || '').replace(/\D/g, '');
+  if (d.indexOf('972') === 0) d = '0' + d.slice(3);
+  else if (d.length === 9 && d.indexOf('0') !== 0) d = '0' + d;
+  return d;
+}
+function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* =========================================================================
+   מצב האפליקציה (State)
+   ========================================================================= */
+const S = {
+  screen: IS_CONFIGURED ? 'login' : 'config',
+  loading: false,
+  loginName: '', loginPhone: '', loginError: '',
+  currentUser: null,
+  toranim: [],
+  viewYear: 0, viewMonth: 0,
+  assignments: {},
+  modalDate: null,
+  assignQuery: '',
+  searchQuery: '',
+  banners: [],
+  dismissedBanners: {},
+  adminOpen: false,
+  newToranName: '', newToranPhone: ''
+};
+
+function render() {
+  const root = document.getElementById('app-root');
+  if (S.screen === 'config') root.innerHTML = renderConfigScreen();
+  else if (S.screen === 'login') root.innerHTML = renderLoginScreen();
+  else if (S.screen === 'pending') root.innerHTML = renderPendingScreen();
+  else if (S.screen === 'app') root.innerHTML = renderAppScreen();
+}
+
+/* ---------- מסך הגדרה ---------- */
+function renderConfigScreen() {
+  return '<div class="center-screen"><div class="card auth-card">'
+    + '<div class="auth-eyebrow">שלב הגדרה ראשוני</div>'
+    + '<h1 class="auth-title">צריך לחבר מסד נתונים</h1>'
+    + '<p class="auth-sub">כדי שהאפליקציה תוכל לשמור תורנים ושיבוצים באופן קבוע, יש לחבר אותה לפרויקט Supabase חינמי. זה לוקח כמה דקות וללא תשלום.</p>'
+    + '<div class="config-steps">'
+      + '1. צרו פרויקט חינמי ב-<code>supabase.com</code><br>'
+      + '2. הריצו ב-SQL Editor את סקריפט ההקמה שקיבלתם בהסבר<br>'
+      + '3. ב-Settings → API העתיקו את <code>Project URL</code> ואת <code>anon public key</code><br>'
+      + '4. הדביקו אותם בקובץ זה בתחילת תגית ה-<code>&lt;script&gt;</code>, במקום <code>sb_publishable_FX8-szZIFfeJxCOz0IAMAQ_O4Cckx3u</code> ו-<code>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjeWl6emFwcGl5emNteGNnb3h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDY3OTYsImV4cCI6MjA5NzYyMjc5Nn0.dQjdwU2ry50e5ruGZjEcrXRVJnwXR95qnNChLPnkt7o</code><br>'
+      + '5. שמרו את הקובץ ורעננו את הדף'
+    + '</div>'
+  + '</div></div>';
+}
+
+/* ---------- מסך כניסה ---------- */
+function renderLoginScreen() {
+  return '<div class="center-screen"><div class="card auth-card">'
+    + '<div class="auth-eyebrow">כניסה</div>'
+    + '<h1 class="auth-title">שיבוץ תורני מטבח</h1>'
+    + '<p class="auth-sub">הזינו שם מלא ומספר טלפון כדי להיכנס. אם זו הכניסה הראשונה שלכם, ייפתח עבורכם כרטיס וממתינים לאישור מנהל.</p>'
+    + '<div class="auth-field"><label class="field-label">שם מלא</label>'
+      + '<input class="text-input" type="text" value="' + esc(S.loginName) + '" oninput="S.loginName=this.value" placeholder="לדוגמה: ישראל ישראלי"></div>'
+    + '<div class="auth-field"><label class="field-label">מספר טלפון</label>'
+      + '<input class="text-input" type="tel" value="' + esc(S.loginPhone) + '" oninput="S.loginPhone=this.value" onkeydown="if(event.key===\'Enter\')submitLogin()" placeholder="050-1234567"></div>'
+    + (S.loginError ? '<div class="error-text">' + esc(S.loginError) + '</div>' : '')
+    + '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;" onclick="submitLogin()" ' + (S.loading ? 'disabled' : '') + '>'
+      + (S.loading ? '<span class="spinner"></span> מתחבר...' : 'כניסה')
+    + '</button>'
+  + '</div></div>';
+}
+
+async function submitLogin() {
+  const name = S.loginName.trim();
+  const phone = normalizePhone(S.loginPhone);
+  if (!name || phone.length < 9) { S.loginError = 'נא להזין שם מלא ומספר טלפון תקינים'; render(); return; }
+  S.loginError = ''; S.loading = true; render();
+  try {
+    let toran = await api.getToranByPhone(phone);
+    if (toran) {
+      S.currentUser = toran;
+      if (toran.status === 'approved') { await enterApp(); }
+      else { S.loading = false; S.screen = 'pending'; render(); }
+    } else {
+      const existing = await api.getAllToranim();
+      const isFirst = !existing || existing.length === 0;
+      const created = await api.insertToran({ name: name, phone: phone, status: isFirst ? 'approved' : 'pending', is_admin: isFirst });
+      S.currentUser = created;
+      if (isFirst) { await enterApp(); }
+      else { S.loading = false; S.screen = 'pending'; render(); }
+    }
+  } catch (e) {
+    S.loading = false; S.loginError = 'שגיאה בהתחברות: ' + e.message; render();
+  }
+}
+
+/* ---------- מסך המתנה לאישור ---------- */
+function renderPendingScreen() {
+  return '<div class="center-screen"><div class="card auth-card" style="text-align:center;">'
+    + '<div class="auth-eyebrow">ממתין לאישור</div>'
+    + '<h1 class="auth-title">היי, ' + esc(S.currentUser.name) + '</h1>'
+    + '<p class="auth-sub">הבקשה שלך נקלטה וממתינה לאישור מנהל. ברגע שתאושר תוכל/י להיכנס ולראות את לוח השיבוצים.</p>'
+    + '<button class="btn btn-ghost" onclick="logout()">חזרה למסך הכניסה</button>'
+  + '</div></div>';
+}
+
+function logout() {
+  S.currentUser = null; S.toranim = []; S.assignments = {}; S.modalDate = null;
+  S.adminOpen = false; S.banners = []; S.loginName = ''; S.loginPhone = ''; S.loginError = '';
+  S.screen = 'login'; render();
+}
+
+/* ---------- כניסה לאפליקציה: טעינת נתונים ---------- */
+async function enterApp() {
+  S.screen = 'app';
+  const t = new Date();
+  if (!S.viewYear) { S.viewYear = t.getFullYear(); S.viewMonth = t.getMonth() + 1; }
+  await loadToranim();
+  await loadMonth(S.viewYear, S.viewMonth);
+  await computeBanners();
+  S.loading = false;
+  render();
+}
+async function loadToranim() { S.toranim = await api.getAllToranim() || []; }
+async function loadMonth(y, m) {
+  const start = ymd(y, m, 1), end = ymd(y, m, daysInGregMonth(y, m));
+  const rows = await api.getAssignmentsRange(start, end) || [];
+  S.assignments = {};
+  rows.forEach(function (r) {
+    if (!S.assignments[r.date]) S.assignments[r.date] = [];
+    S.assignments[r.date].push({ id: r.id, toran_id: r.toran_id, name: r.toranim ? r.toranim.name : '', created_at: r.created_at });
+  });
+}
+async function computeBanners() {
+  S.banners = [];
+  if (!S.currentUser) return;
+  const rows = await api.getAssignmentsForToran(S.currentUser.id, todayYMD()) || [];
+  const today = todayYMD();
+  rows.forEach(function (r) {
+    const diff = daysBetween(today, r.date);
+    if (diff < 0 || diff > 7) return;
+    const createdDate = (r.created_at || '').slice(0, 10);
+    const noticeDays = createdDate ? daysBetween(createdDate, r.date) : 99;
+    const isLate = noticeDays < 7;
+    let text;
+    if (diff === 0) text = 'אתה משובץ היום, ' + formatGregFull(r.date);
+    else if (diff === 1) text = 'אתה משובץ מחר, ' + formatGregFull(r.date);
+    else if (diff === 7) text = 'אתה משובץ בעוד שבוע, ב' + formatGregFull(r.date);
+    else text = 'אתה משובץ ב' + formatGregFull(r.date) + ' (בעוד ' + diff + ' ימים)';
+    if (isLate) text += ' — שובצת בהתראה קצרה מהרגיל';
+    S.banners.push({ id: r.id, text: text });
+  });
+}
+function dismissBanner(id) { S.dismissedBanners[id] = true; render(); }
+
+/* ---------- מסך האפליקציה הראשי ---------- */
+function renderAppScreen() {
+  return renderHeader() + renderBanners() + renderMain()
+    + (S.modalDate ? renderModal() : '')
+    + (S.adminOpen ? renderAdminPanel() : '');
+}
+
+function renderHeader() {
+  return '<header class="app-header">'
+    + '<div class="brand"><div class="brand-title">שיבוץ תורני מטבח</div><div class="brand-sub">לוח תורנויות</div></div>'
+    + '<div class="header-search" id="header-search-wrap">'
+      + '<input type="text" placeholder="חיפוש — מתי אני משובץ?" value="' + esc(S.searchQuery) + '" oninput="updateSearchPanel(this.value)" onfocus="updateSearchPanel(this.value)">'
+      + '<div id="search-panel-slot"></div>'
+    + '</div>'
+    + '<div class="header-actions">'
+      + '<div class="header-user">' + (S.currentUser.is_admin ? '<span class="admin-tag">מנהל</span>' : '') + '<b>' + esc(S.currentUser.name) + '</b></div>'
+      + (S.currentUser.is_admin ? '<button class="btn btn-ghost btn-sm" onclick="openAdmin()">ניהול</button>' : '')
+      + '<button class="btn btn-ghost btn-sm" onclick="logout()">יציאה</button>'
+    + '</div>'
+  + '</header>';
+}
+
+function updateSearchPanel(val) {
+  S.searchQuery = val;
+  const slot = document.getElementById('search-panel-slot');
+  if (!slot) return;
+  if (!val || !val.trim()) { slot.innerHTML = ''; return; }
+  const q = val.trim();
+  const matches = S.toranim.filter(function (t) { return t.status === 'approved' && t.name.indexOf(q) !== -1; }).slice(0, 8);
+  if (matches.length === 0) { slot.innerHTML = '<div class="search-results-panel"><div class="search-empty">לא נמצאו תורנים תואמים</div></div>'; return; }
+  slot.innerHTML = '<div class="search-results-panel">' + matches.map(function (t) {
+    return '<div class="sr-item" onclick="showPersonSchedule(\'' + t.id + '\')">' + esc(t.name) + '</div>';
+  }).join('') + '</div>';
+}
+async function showPersonSchedule(id) {
+  const t = S.toranim.find(function (x) { return x.id === id; });
+  const slot = document.getElementById('search-panel-slot');
+  slot.innerHTML = '<div class="search-results-panel"><div class="search-empty">טוען...</div></div>';
+  const rows = await api.getAssignmentsForToran(id, todayYMD()) || [];
+  if (rows.length === 0) {
+    slot.innerHTML = '<div class="search-results-panel"><div class="search-back" onclick="updateSearchPanel(S.searchQuery)">חזרה</div><div class="search-empty">' + esc(t.name) + ' לא משובץ/ת בתאריכים הקרובים</div></div>';
+    return;
+  }
+  const rowsHtml = rows.map(function (r) {
+    return '<div class="sd-row"><span>' + formatGregFull(r.date) + '</span><span class="muted">' + formatHebFull(r.date) + '</span></div>';
+  }).join('');
+  slot.innerHTML = '<div class="search-results-panel"><div class="search-back" onclick="updateSearchPanel(S.searchQuery)">חזרה</div>'
+    + '<div style="padding:10px 14px;font-weight:700;font-size:13px;">' + esc(t.name) + '</div>'
+    + '<div class="search-dates">' + rowsHtml + '</div></div>';
+}
+
+function renderBanners() {
+  const visible = S.banners.filter(function (b) { return !S.dismissedBanners[b.id]; });
+  if (visible.length === 0) return '';
+  return '<div class="banner-wrap">' + visible.map(function (b) {
+    return '<div class="banner"><span><b>תזכורת:</b> ' + esc(b.text) + '</span><button onclick="dismissBanner(\'' + b.id + '\')">✕</button></div>';
+  }).join('') + '</div>';
+}
+
+/* ---------- לוח חודשי ---------- */
+function renderMain() {
+  const y = S.viewYear, m = S.viewMonth;
+  const hStart = gregorianToHebrew(y, m, 1);
+  const numDays = daysInGregMonth(y, m);
+  const hEnd = gregorianToHebrew(y, m, numDays);
+  const firstWd = firstWeekdayOfMonth(y, m);
+  const todayStr = todayYMD();
+  let cells = '';
+  for (let i = 0; i < firstWd; i++) cells += '<div class="cal-cell empty"></div>';
+  let lastHebMonth = null;
+  for (let d = 1; d <= numDays; d++) {
+    const dateStr = ymd(y, m, d);
+    const h = gregorianToHebrew(y, m, d);
+    const showMonthName = (lastHebMonth === null || h.month !== lastHebMonth);
+    lastHebMonth = h.month;
+    const hLabel = hebrewGematria(h.day) + (showMonthName ? ' ב' + hebrewMonthName(h.year, h.month) : '');
+    const isToday = dateStr === todayStr;
+    const dayAssignments = S.assignments[dateStr] || [];
+    let chipsHtml = '';
+    if (dayAssignments.length) {
+      const shown = dayAssignments.slice(0, 2);
+      chipsHtml = '<div class="chips">' + shown.map(function (a) { return '<div class="chip">' + esc(a.name) + '</div>'; }).join('');
+      if (dayAssignments.length > 2) chipsHtml += '<div class="chip-more">+' + (dayAssignments.length - 2) + ' נוספים</div>';
+      chipsHtml += '</div>';
+    }
+    cells += '<div class="cal-cell' + (isToday ? ' today' : '') + '" onclick="openDay(\'' + dateStr + '\')">'
+      + '<div class="g-day">' + d + '</div>'
+      + '<div class="h-day">' + hLabel + '</div>'
+      + chipsHtml
+    + '</div>';
+  }
+  const totalCells = firstWd + numDays;
+  const trailing = (7 - (totalCells % 7)) % 7;
+  for (let i = 0; i < trailing; i++) cells += '<div class="cal-cell empty"></div>';
+
+  return '<main class="app-main">'
+    + '<div class="month-nav">'
+      + '<button onclick="navMonth(-1)" aria-label="חודש קודם">›</button>'
+      + '<div class="month-label"><div class="g-month">' + GREG_MONTH_NAMES[m - 1] + ' ' + y + '</div>'
+        + '<div class="h-month">' + hebrewMonthName(hStart.year, hStart.month) + (hEnd.month !== hStart.month ? '–' + hebrewMonthName(hEnd.year, hEnd.month) : '') + ' ' + hebrewGematria(hStart.year % 1000) + '</div></div>'
+      + '<button onclick="navMonth(1)" aria-label="חודש הבא">‹</button>'
+    + '</div>'
+    + '<div style="text-align:center;margin-bottom:14px;"><button class="today-btn" onclick="goToday()">חזרה להיום</button></div>'
+    + '<div class="cal-grid">' + WEEKDAY_SHORT.map(function (w) { return '<div class="cal-weekday">' + w + '</div>'; }).join('') + cells + '</div>'
+  + '</main>';
+}
+async function navMonth(delta) {
+  let m = S.viewMonth + delta, y = S.viewYear;
+  if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; }
+  S.viewYear = y; S.viewMonth = m;
+  await loadMonth(y, m); render();
+}
+async function goToday() {
+  const t = new Date(); S.viewYear = t.getFullYear(); S.viewMonth = t.getMonth() + 1;
+  await loadMonth(S.viewYear, S.viewMonth); render();
+}
+
+/* ---------- מודאל שיבוץ יום ---------- */
+function openDay(dateStr) { S.modalDate = dateStr; S.assignQuery = ''; render(); }
+function closeModal() { S.modalDate = null; render(); }
+
+function renderModal() {
+  const dateStr = S.modalDate;
+  const list = S.assignments[dateStr] || [];
+  const isAdmin = S.currentUser.is_admin;
+  const rowsHtml = list.length ? list.map(function (a) {
+    return '<div class="assigned-row"><span>' + esc(a.name) + '</span>' + (isAdmin ? '<button class="remove-x" onclick="removeAssignment(\'' + a.id + '\')" aria-label="הסרה">✕</button>' : '') + '</div>';
+  }).join('') : '<div class="empty-note">אין עדיין תורנים משובצים ליום זה</div>';
+  let assignBoxHtml;
+  if (isAdmin) {
+    assignBoxHtml = '<label class="field-label">הוספת תורן</label>'
+      + '<div class="assign-box"><input class="text-input" placeholder="הקלידו שם תורן רשום..." oninput="updateAssignSuggestions(this.value)" autocomplete="off">'
+      + '<div id="assign-suggestions-slot"></div></div>';
+  } else {
+    assignBoxHtml = '<div class="empty-note-sm">רק מנהלים יכולים לשבץ תורנים ליום זה.</div>';
+  }
+  return '<div class="modal-overlay" onclick="if(event.target===this)closeModal()">'
+    + '<div class="modal-box">'
+      + '<div class="modal-head"><div><div class="g-date">' + formatGregFull(dateStr) + '</div><div class="h-date">' + formatHebFull(dateStr) + '</div></div>'
+        + '<button class="modal-close" onclick="closeModal()" aria-label="סגירה">✕</button></div>'
+      + '<div class="modal-body"><div class="assigned-list">' + rowsHtml + '</div>' + assignBoxHtml + '</div>'
+    + '</div></div>';
+}
+function updateAssignSuggestions(val) {
+  S.assignQuery = val;
+  const slot = document.getElementById('assign-suggestions-slot');
+  if (!slot) return;
+  if (!val || !val.trim()) { slot.innerHTML = ''; return; }
+  const q = val.trim();
+  const already = (S.assignments[S.modalDate] || []).map(function (a) { return a.toran_id; });
+  const matches = S.toranim.filter(function (t) { return t.status === 'approved' && already.indexOf(t.id) === -1 && t.name.indexOf(q) !== -1; }).slice(0, 8);
+  if (matches.length === 0) { slot.innerHTML = '<div class="suggestions"><div class="suggestion-empty">לא נמצא תורן רשום בשם זה</div></div>'; return; }
+  slot.innerHTML = '<div class="suggestions">' + matches.map(function (t) {
+    return '<div class="suggestion-item" onclick="assignToran(\'' + t.id + '\')">' + esc(t.name) + '</div>';
+  }).join('') + '</div>';
+}
+async function assignToran(toranId) {
+  const dateStr = S.modalDate;
+  try {
+    const created = await api.insertAssignment(dateStr, toranId);
+    const t = S.toranim.find(function (x) { return x.id === toranId; });
+    if (!S.assignments[dateStr]) S.assignments[dateStr] = [];
+    S.assignments[dateStr].push({ id: created.id, toran_id: toranId, name: t.name, created_at: created.created_at });
+    S.assignQuery = '';
+    render();
+  } catch (e) { alert('שגיאה בשיבוץ: ' + e.message); }
+}
+async function removeAssignment(id) {
+  const dateStr = S.modalDate;
+  try {
+    await api.deleteAssignment(id);
+    S.assignments[dateStr] = (S.assignments[dateStr] || []).filter(function (a) { return a.id !== id; });
+    render();
+  } catch (e) { alert('שגיאה בהסרה: ' + e.message); }
+}
+
+/* ---------- פאנל ניהול ---------- */
+function openAdmin() { S.adminOpen = true; S.newToranName = ''; S.newToranPhone = ''; render(); }
+function closeAdmin() { S.adminOpen = false; render(); }
+
+function renderAdminPanel() {
+  const pending = S.toranim.filter(function (t) { return t.status === 'pending'; });
+  const active = S.toranim.filter(function (t) { return t.status === 'approved'; });
+  const adminCount = active.filter(function (t) { return t.is_admin; }).length;
+
+  const pendingHtml = pending.length ? pending.map(function (t) {
+    return '<div class="admin-row"><div><div class="name">' + esc(t.name) + '</div><div class="phone">' + esc(t.phone) + '</div></div>'
+      + '<div class="admin-row-actions">'
+        + '<button class="btn btn-confirm btn-sm" onclick="approveToran(\'' + t.id + '\')">אישור</button>'
+        + '<button class="btn btn-danger btn-sm" onclick="rejectToran(\'' + t.id + '\')">דחייה</button>'
+      + '</div></div>';
+  }).join('') : '<div class="empty-note-sm">אין בקשות ממתינות</div>';
+
+  const activeHtml = active.length ? active.map(function (t) {
+    const isLastAdmin = t.is_admin && adminCount <= 1;
+    return '<div class="admin-row"><div><div class="name">' + esc(t.name) + '</div><div class="phone">' + esc(t.phone) + '</div></div>'
+      + '<div class="admin-row-actions">'
+        + '<label class="toggle-wrap"><input type="checkbox" ' + (t.is_admin ? 'checked' : '') + ' onchange="toggleAdmin(\'' + t.id + '\', this.checked)"> מנהל</label>'
+        + '<button class="btn btn-danger btn-sm" ' + (isLastAdmin ? 'disabled title="לא ניתן להסיר את המנהל היחיד"' : '') + ' onclick="deactivateToran(\'' + t.id + '\')">הסרה</button>'
+      + '</div></div>';
+  }).join('') : '<div class="empty-note-sm">אין תורנים פעילים</div>';
+
+  return '<div class="admin-overlay" onclick="if(event.target===this)closeAdmin()">'
+    + '<div class="admin-panel">'
+      + '<div class="admin-head"><h2>ניהול</h2><button class="modal-close" onclick="closeAdmin()" aria-label="סגירה">✕</button></div>'
+      + '<div class="admin-section"><h3>ממתינים לאישור (' + pending.length + ')</h3>' + pendingHtml + '</div>'
+      + '<div class="admin-section"><h3>תורנים פעילים (' + active.length + ')</h3>' + activeHtml + '</div>'
+      + '<div class="admin-section"><h3>הוספת תורן ישירות</h3>'
+        + '<div class="add-form">'
+          + '<input class="text-input" placeholder="שם מלא" oninput="S.newToranName=this.value">'
+          + '<input class="text-input" placeholder="מספר טלפון" oninput="S.newToranPhone=this.value">'
+          + '<div id="add-toran-error"></div>'
+          + '<button class="btn btn-primary" onclick="addToranDirect()">הוספה</button>'
+        + '</div>'
+      + '</div>'
+    + '</div></div>';
+}
+async function approveToran(id) { await updateToranAndRefreshAdmin(id, { status: 'approved' }); }
+async function rejectToran(id) {
+  if (!confirm('לדחות את הבקשה? ניתן יהיה להוסיף את האדם שוב בעתיד אם יידרש.')) return;
+  await updateToranAndRefreshAdmin(id, { status: 'inactive' });
+}
+async function toggleAdmin(id, checked) {
+  if (!checked) {
+    const adminCount = S.toranim.filter(function (x) { return x.status === 'approved' && x.is_admin; }).length;
+    if (adminCount <= 1) { alert('לא ניתן להסיר את המנהל היחיד במערכת. הוסיפו מנהל נוסף לפני כן.'); render(); return; }
+  }
+  await updateToranAndRefreshAdmin(id, { is_admin: checked });
+}
+async function deactivateToran(id) {
+  if (!confirm('להסיר תורן זה מהרשימה הפעילה? שיבוצים קודמים יישמרו בהיסטוריה, אך הוא/היא לא יופיעו יותר באוטוקומפליט.')) return;
+  await updateToranAndRefreshAdmin(id, { status: 'inactive' });
+}
+async function updateToranAndRefreshAdmin(id, patch) {
+  try {
+    await api.updateToran(id, patch);
+    await loadToranim();
+    if (S.currentUser && S.currentUser.id === id) S.currentUser = Object.assign({}, S.currentUser, patch);
+    render();
+  } catch (e) { alert('שגיאה: ' + e.message); }
+}
+async function addToranDirect() {
+  const name = (S.newToranName || '').trim();
+  const phone = normalizePhone(S.newToranPhone || '');
+  const errSlot = document.getElementById('add-toran-error');
+  if (!name || phone.length < 9) { errSlot.innerHTML = '<div class="error-text">נא להזין שם ומספר טלפון תקינים</div>'; return; }
+  try {
+    await api.insertToran({ name: name, phone: phone, status: 'approved', is_admin: false });
+    S.newToranName = ''; S.newToranPhone = '';
+    await loadToranim();
+    render();
+  } catch (e) { errSlot.innerHTML = '<div class="error-text">שגיאה: ' + esc(e.message) + '</div>'; }
+}
+
+/* ---------- אתחול ---------- */
+document.addEventListener('click', function (e) {
+  const wrap = document.getElementById('header-search-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    const slot = document.getElementById('search-panel-slot');
+    if (slot) slot.innerHTML = '';
+  }
+});
+function init() {
+  const t = new Date();
+  S.viewYear = t.getFullYear(); S.viewMonth = t.getMonth() + 1;
+  render();
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
