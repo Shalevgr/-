@@ -22,6 +22,8 @@
     --confirm-soft:#E3EBE0;
     --danger:#B2453A;
     --danger-soft:#F3DEDB;
+    --swap:#C98A1F;
+    --swap-soft:#F8E9C9;
     --border:#E4DACB;
     --radius:14px;
     --radius-sm:9px;
@@ -160,6 +162,7 @@
   .cal-cell:hover{box-shadow:var(--shadow);border-color:#d8c9b3;}
   .cal-cell.empty{background:transparent;border-color:transparent;cursor:default;box-shadow:none;}
   .cal-cell.today{border-color:var(--accent);border-width:2px;}
+  .cal-cell.swap-pending{border-color:var(--swap);border-width:2px;background:var(--swap-soft);}
   .cal-cell .g-day{font-size:15px;font-weight:700;}
   .cal-cell.today .g-day{color:var(--accent-dark);}
   .cal-cell .h-day{font-size:10.5px;color:var(--ink-muted);line-height:1.3;}
@@ -197,6 +200,7 @@
     border-radius:var(--radius-sm);padding:9px 13px;font-size:14px;
   }
   .assigned-row .remove-x{background:none;border:none;color:var(--danger);font-size:15px;padding:2px 6px;}
+  .assigned-row .row-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
   .empty-note{font-size:13.5px;color:var(--ink-muted);background:var(--surface-alt);border-radius:var(--radius-sm);padding:14px;text-align:center;}
   .assign-box{position:relative;margin-top:6px;}
   .suggestions{
@@ -241,7 +245,7 @@
    הגדרות חיבור למסד הנתונים (Supabase)
    יש למלא כאן את הפרטים מהפרויקט שלך ב-Supabase לפני השימוש באפליקציה.
    ========================================================================= */
-const SUPABASE_URL = 'https://fcyizzappiyzcmxcgoxw.supabase.co';
+const SUPABASE_URL = 'fcyizzappiyzcmxcgoxw';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjeWl6emFwcGl5emNteGNnb3h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDY3OTYsImV4cCI6MjA5NzYyMjc5Nn0.dQjdwU2ry50e5ruGZjEcrXRVJnwXR95qnNChLPnkt7o';
 const IS_CONFIGURED = !SUPABASE_URL.includes('YOUR_') && !SUPABASE_ANON_KEY.includes('YOUR_');
 
@@ -276,11 +280,13 @@ const api = {
   getToranByPhone: (phone) => sb('toranim?select=*&phone=eq.' + encodeURIComponent(phone)).then(r => r && r[0]),
   insertToran: (data) => sb('toranim', { method: 'POST', body: data }).then(r => r && r[0]),
   updateToran: (id, data) => sb('toranim?id=eq.' + id, { method: 'PATCH', body: data }).then(r => r && r[0]),
-  getAssignmentsRange: (startYmd, endYmd) => sb('assignments?select=id,date,toran_id,created_at,toranim(id,name,phone)&date=gte.' + startYmd + '&date=lte.' + endYmd + '&order=date.asc'),
+  getAssignmentsRange: (startYmd, endYmd) => sb('assignments?select=id,date,toran_id,swap_requested,created_at,toranim(id,name,phone)&date=gte.' + startYmd + '&date=lte.' + endYmd + '&order=date.asc'),
   getAssignmentsForToran: (toranId, fromYmd) => sb('assignments?select=id,date,created_at&toran_id=eq.' + toranId + (fromYmd ? '&date=gte.' + fromYmd : '') + '&order=date.asc'),
   insertAssignment: (date, toranId) => sb('assignments', { method: 'POST', body: { date: date, toran_id: toranId } }).then(r => r && r[0]),
+  updateAssignment: (id, data) => sb('assignments?id=eq.' + id, { method: 'PATCH', body: data }).then(r => r && r[0]),
   deleteAssignment: (id) => sb('assignments?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }),
-  countToranim: () => sb('toranim?select=id', { headers: { 'Prefer': 'count=exact' } })
+  countToranim: () => sb('toranim?select=id', { headers: { 'Prefer': 'count=exact' } }),
+  getAssignmentsForCount: (startYmd, beforeYmd) => sb('assignments?select=toran_id&date=gte.' + startYmd + '&date=lt.' + beforeYmd)
 };
 
 /* =========================================================================
@@ -336,6 +342,24 @@ function rdToHebrew(rd) {
   return { year: year, month: month, day: day };
 }
 function gregorianToHebrew(y, m, d) { return rdToHebrew(gregorianToRD(y, m, d)); }
+
+function findGregorianStartOfHebrewYear(targetHebYear) {
+  /* מאתר את התאריך הלועזי של א' תשרי לשנה העברית הנתונה, על ידי סריקה של
+     החלון הלועזי (אוגוסט–אוקטובר) שבו ראש השנה תמיד חל, תוך שימוש בפונקציות
+     ההמרה שכבר אומתו למעלה. */
+  const candidates = [targetHebYear - 3761, targetHebYear - 3760];
+  for (let ci = 0; ci < candidates.length; ci++) {
+    const gy = candidates[ci];
+    for (let gm = 8; gm <= 10; gm++) {
+      const days = daysInGregMonth(gy, gm);
+      for (let gd = 1; gd <= days; gd++) {
+        const h = gregorianToHebrew(gy, gm, gd);
+        if (h.year === targetHebYear && h.month === 7 && h.day === 1) return ymd(gy, gm, gd);
+      }
+    }
+  }
+  return null;
+}
 
 const HEBREW_MONTH_NAMES = {1:'ניסן',2:'אייר',3:'סיון',4:'תמוז',5:'אב',6:'אלול',7:'תשרי',8:'חשון',9:'כסלו',10:'טבת',11:'שבט',12:'אדר',13:"אדר ב׳"};
 function hebrewMonthName(year, month) {
@@ -412,7 +436,9 @@ const S = {
   banners: [],
   dismissedBanners: {},
   adminOpen: false,
-  newToranName: '', newToranPhone: ''
+  newToranName: '', newToranPhone: '',
+  folderOpen: false, folderLoading: false, folderData: null, folderError: null,
+  quickAssignToranId: null
 };
 
 function render() {
@@ -433,7 +459,7 @@ function renderConfigScreen() {
       + '1. צרו פרויקט חינמי ב-<code>supabase.com</code><br>'
       + '2. הריצו ב-SQL Editor את סקריפט ההקמה שקיבלתם בהסבר<br>'
       + '3. ב-Settings → API העתיקו את <code>Project URL</code> ואת <code>anon public key</code><br>'
-      + '4. הדביקו אותם בקובץ זה בתחילת תגית ה-<code>&lt;script&gt;</code>, במקום <code>sb_publishable_FX8-szZIFfeJxCOz0IAMAQ_O4Cckx3u</code> ו-<code>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjeWl6emFwcGl5emNteGNnb3h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDY3OTYsImV4cCI6MjA5NzYyMjc5Nn0.dQjdwU2ry50e5ruGZjEcrXRVJnwXR95qnNChLPnkt7o</code><br>'
+      + '4. הדביקו אותם בקובץ זה בתחילת תגית ה-<code>&lt;script&gt;</code>, במקום <code>fcyizzappiyzcmxcgoxw</code> ו-<code>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjeWl6emFwcGl5emNteGNnb3h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNDY3OTYsImV4cCI6MjA5NzYyMjc5Nn0.dQjdwU2ry50e5ruGZjEcrXRVJnwXR95qnNChLPnkt7o</code><br>'
       + '5. שמרו את הקובץ ורעננו את הדף'
     + '</div>'
   + '</div></div>';
@@ -493,6 +519,7 @@ function renderPendingScreen() {
 function logout() {
   S.currentUser = null; S.toranim = []; S.assignments = {}; S.modalDate = null;
   S.adminOpen = false; S.banners = []; S.loginName = ''; S.loginPhone = ''; S.loginError = '';
+  S.folderOpen = false; S.quickAssignToranId = null;
   S.screen = 'login'; render();
 }
 
@@ -514,7 +541,7 @@ async function loadMonth(y, m) {
   S.assignments = {};
   rows.forEach(function (r) {
     if (!S.assignments[r.date]) S.assignments[r.date] = [];
-    S.assignments[r.date].push({ id: r.id, toran_id: r.toran_id, name: r.toranim ? r.toranim.name : '', created_at: r.created_at });
+    S.assignments[r.date].push({ id: r.id, toran_id: r.toran_id, name: r.toranim ? r.toranim.name : '', created_at: r.created_at, swap_requested: !!r.swap_requested });
   });
 }
 async function computeBanners() {
@@ -541,9 +568,17 @@ function dismissBanner(id) { S.dismissedBanners[id] = true; render(); }
 
 /* ---------- מסך האפליקציה הראשי ---------- */
 function renderAppScreen() {
-  return renderHeader() + renderBanners() + renderMain()
+  return renderHeader() + renderQuickAssignBanner() + renderBanners() + renderMain()
     + (S.modalDate ? renderModal() : '')
-    + (S.adminOpen ? renderAdminPanel() : '');
+    + (S.adminOpen ? renderAdminPanel() : '')
+    + (S.folderOpen ? renderFolderPanel() : '');
+}
+function renderQuickAssignBanner() {
+  if (!S.quickAssignToranId) return '';
+  const t = S.toranim.find(function (x) { return x.id === S.quickAssignToranId; });
+  const name = t ? t.name : '';
+  return '<div class="banner-wrap"><div class="banner"><span>בחרו יום בלוח השנה כדי לשבץ את <b>' + esc(name) + '</b></span>'
+    + '<button onclick="cancelQuickAssign()">ביטול</button></div></div>';
 }
 
 function renderHeader() {
@@ -556,6 +591,7 @@ function renderHeader() {
     + '<div class="header-actions">'
       + '<div class="header-user">' + (S.currentUser.is_admin ? '<span class="admin-tag">מנהל</span>' : '') + '<b>' + esc(S.currentUser.name) + '</b></div>'
       + (S.currentUser.is_admin ? '<button class="btn btn-ghost btn-sm" onclick="openAdmin()">ניהול</button>' : '')
+      + (S.currentUser.is_admin ? '<button class="btn btn-ghost btn-sm" onclick="openFolder()">תיקיית תורנים</button>' : '')
       + '<button class="btn btn-ghost btn-sm" onclick="logout()">יציאה</button>'
     + '</div>'
   + '</header>';
@@ -617,14 +653,15 @@ function renderMain() {
     const hLabel = hebrewGematria(h.day) + (showMonthName ? ' ב' + hebrewMonthName(h.year, h.month) : '');
     const isToday = dateStr === todayStr;
     const dayAssignments = S.assignments[dateStr] || [];
+    const hasSwapPending = dayAssignments.some(function (a) { return a.swap_requested; });
     let chipsHtml = '';
     if (dayAssignments.length) {
       const shown = dayAssignments.slice(0, 2);
-      chipsHtml = '<div class="chips">' + shown.map(function (a) { return '<div class="chip">' + esc(a.name) + '</div>'; }).join('');
+      chipsHtml = '<div class="chips">' + shown.map(function (a) { return '<div class="chip">' + esc(a.name) + (a.swap_requested ? ' 🔄' : '') + '</div>'; }).join('');
       if (dayAssignments.length > 2) chipsHtml += '<div class="chip-more">+' + (dayAssignments.length - 2) + ' נוספים</div>';
       chipsHtml += '</div>';
     }
-    cells += '<div class="cal-cell' + (isToday ? ' today' : '') + '" onclick="openDay(\'' + dateStr + '\')">'
+    cells += '<div class="cal-cell' + (isToday ? ' today' : '') + (hasSwapPending ? ' swap-pending' : '') + '" onclick="openDay(\'' + dateStr + '\')">'
       + '<div class="g-day">' + d + '</div>'
       + '<div class="h-day">' + hLabel + '</div>'
       + chipsHtml
@@ -657,15 +694,46 @@ async function goToday() {
 }
 
 /* ---------- מודאל שיבוץ יום ---------- */
-function openDay(dateStr) { S.modalDate = dateStr; S.assignQuery = ''; render(); }
+function openDay(dateStr) {
+  if (S.quickAssignToranId) { quickAssignToDay(dateStr); return; }
+  S.modalDate = dateStr; S.assignQuery = ''; render();
+}
 function closeModal() { S.modalDate = null; render(); }
+function startQuickAssign(toranId) { S.quickAssignToranId = toranId; S.folderOpen = false; render(); }
+function cancelQuickAssign() { S.quickAssignToranId = null; render(); }
+async function quickAssignToDay(dateStr) {
+  const toranId = S.quickAssignToranId;
+  const t = S.toranim.find(function (x) { return x.id === toranId; });
+  if (!t) { S.quickAssignToranId = null; render(); return; }
+  try {
+    const created = await api.insertAssignment(dateStr, toranId);
+    if (!S.assignments[dateStr]) S.assignments[dateStr] = [];
+    S.assignments[dateStr].push({ id: created.id, toran_id: toranId, name: t.name, created_at: created.created_at, swap_requested: false });
+    S.quickAssignToranId = null;
+    render();
+  } catch (e) {
+    alert('שגיאה בשיבוץ: ' + e.message + ' — נסו תאריך אחר');
+  }
+}
 
 function renderModal() {
   const dateStr = S.modalDate;
   const list = S.assignments[dateStr] || [];
   const isAdmin = S.currentUser.is_admin;
+  const isFutureOrToday = dateStr >= todayYMD();
   const rowsHtml = list.length ? list.map(function (a) {
-    return '<div class="assigned-row"><span>' + esc(a.name) + '</span>' + (isAdmin ? '<button class="remove-x" onclick="removeAssignment(\'' + a.id + '\')" aria-label="הסרה">✕</button>' : '') + '</div>';
+    const isMine = a.toran_id === S.currentUser.id;
+    let actionBtns = '';
+    if (isMine && isFutureOrToday) {
+      actionBtns += a.swap_requested
+        ? '<button class="btn btn-ghost btn-sm" onclick="cancelSwapRequest(\'' + a.id + '\')">ביטול בקשה</button>'
+        : '<button class="btn btn-ghost btn-sm" onclick="requestSwap(\'' + a.id + '\')">חפש מחליף</button>';
+    } else if (!isMine && a.swap_requested) {
+      actionBtns += '<button class="btn btn-confirm btn-sm" onclick="claimSwap(\'' + a.id + '\')">החלף</button>';
+    }
+    if (isAdmin) actionBtns += '<button class="remove-x" onclick="removeAssignment(\'' + a.id + '\')" aria-label="הסרה">✕</button>';
+    const swapTag = a.swap_requested ? ' <span class="pill pill-wait">מחפש/ת מחליף</span>' : '';
+    return '<div class="assigned-row"><span>' + esc(a.name) + swapTag + '</span><span class="row-actions">' + actionBtns + '</span></div>';
   }).join('') : '<div class="empty-note">אין עדיין תורנים משובצים ליום זה</div>';
   let assignBoxHtml;
   if (isAdmin) {
@@ -713,6 +781,40 @@ async function removeAssignment(id) {
     S.assignments[dateStr] = (S.assignments[dateStr] || []).filter(function (a) { return a.id !== id; });
     render();
   } catch (e) { alert('שגיאה בהסרה: ' + e.message); }
+}
+
+/* ---------- החלפת תורנויות ---------- */
+function findModalAssignment(id) {
+  const list = S.assignments[S.modalDate] || [];
+  return list.find(function (a) { return a.id === id; });
+}
+async function requestSwap(id) {
+  try {
+    await api.updateAssignment(id, { swap_requested: true });
+    const a = findModalAssignment(id);
+    if (a) a.swap_requested = true;
+    render();
+  } catch (e) { alert('שגיאה: ' + e.message); }
+}
+async function cancelSwapRequest(id) {
+  try {
+    await api.updateAssignment(id, { swap_requested: false });
+    const a = findModalAssignment(id);
+    if (a) a.swap_requested = false;
+    render();
+  } catch (e) { alert('שגיאה: ' + e.message); }
+}
+async function claimSwap(id) {
+  if (!confirm('לקחת את התורנות הזו במקומו/ה?')) return;
+  const dateStr = S.modalDate;
+  const already = (S.assignments[dateStr] || []).some(function (a) { return a.toran_id === S.currentUser.id; });
+  if (already) { alert('את/ה כבר משובץ/צת ביום זה'); return; }
+  try {
+    await api.updateAssignment(id, { toran_id: S.currentUser.id, swap_requested: false });
+    const a = findModalAssignment(id);
+    if (a) { a.toran_id = S.currentUser.id; a.name = S.currentUser.name; a.swap_requested = false; }
+    render();
+  } catch (e) { alert('שגיאה בהחלפה: ' + e.message); }
 }
 
 /* ---------- פאנל ניהול ---------- */
@@ -791,6 +893,45 @@ async function addToranDirect() {
     await loadToranim();
     render();
   } catch (e) { errSlot.innerHTML = '<div class="error-text">שגיאה: ' + esc(e.message) + '</div>'; }
+}
+
+/* ---------- תיקיית תורנים: מספר משמרות בשנה העברית הנוכחית ---------- */
+function openFolder() { S.folderOpen = true; S.folderData = null; S.folderError = null; render(); loadFolderData(); }
+function closeFolder() { S.folderOpen = false; render(); }
+async function loadFolderData() {
+  S.folderLoading = true; render();
+  try {
+    const t = new Date();
+    const hToday = gregorianToHebrew(t.getFullYear(), t.getMonth() + 1, t.getDate());
+    const yearStart = findGregorianStartOfHebrewYear(hToday.year);
+    const todayStr = todayYMD();
+    const rows = await api.getAssignmentsForCount(yearStart, todayStr) || [];
+    const counts = {};
+    rows.forEach(function (r) { counts[r.toran_id] = (counts[r.toran_id] || 0) + 1; });
+    const approved = S.toranim.filter(function (t) { return t.status === 'approved'; });
+    S.folderData = approved.map(function (t) {
+      return { id: t.id, name: t.name, phone: t.phone, count: counts[t.id] || 0 };
+    }).sort(function (a, b) { return b.count - a.count; });
+  } catch (e) {
+    S.folderError = e.message;
+  }
+  S.folderLoading = false; render();
+}
+function renderFolderPanel() {
+  let body;
+  if (S.folderLoading) body = '<div class="empty-note-sm">טוען נתונים...</div>';
+  else if (S.folderError) body = '<div class="error-text">שגיאה: ' + esc(S.folderError) + '</div>';
+  else if (!S.folderData || S.folderData.length === 0) body = '<div class="empty-note-sm">אין תורנים פעילים להצגה</div>';
+  else body = S.folderData.map(function (t, i) {
+    return '<div class="admin-row"><div><div class="name">' + (i + 1) + '. ' + esc(t.name) + '</div><div class="phone">' + esc(t.phone) + '</div></div>'
+      + '<div class="admin-row-actions"><span class="pill pill-confirm">' + t.count + ' משמרות</span>'
+      + '<button class="btn btn-primary btn-sm" onclick="startQuickAssign(\'' + t.id + '\')">שיבוץ</button></div></div>';
+  }).join('');
+  return '<div class="admin-overlay" onclick="if(event.target===this)closeFolder()">'
+    + '<div class="admin-panel">'
+      + '<div class="admin-head"><h2>תיקיית תורנים</h2><button class="modal-close" onclick="closeFolder()" aria-label="סגירה">✕</button></div>'
+      + '<div class="admin-section"><h3>מספר משמרות שבוצעו השנה (שנה עברית נוכחית), מהגבוה לנמוך</h3>' + body + '</div>'
+    + '</div></div>';
 }
 
 /* ---------- אתחול ---------- */
