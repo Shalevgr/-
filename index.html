@@ -444,6 +444,7 @@ const S = {
   loading: false,
   loginName: '', loginPhone: '', loginError: '',
   currentUser: null,
+  pinInput: '', pinConfirm: '', pinError: '',
   toranim: [],
   viewYear: 0, viewMonth: 0,
   assignments: {},
@@ -463,6 +464,8 @@ function render() {
   if (S.screen === 'config') root.innerHTML = renderConfigScreen();
   else if (S.screen === 'login') root.innerHTML = renderLoginScreen();
   else if (S.screen === 'pending') root.innerHTML = renderPendingScreen();
+  else if (S.screen === 'set_pin') root.innerHTML = renderSetPinScreen();
+  else if (S.screen === 'enter_pin') root.innerHTML = renderEnterPinScreen();
   else if (S.screen === 'app') root.innerHTML = renderAppScreen();
 }
 
@@ -508,22 +511,85 @@ async function submitLogin() {
     let toran = await api.getToranByPhone(phone);
     if (toran) {
       S.currentUser = toran;
-      if (toran.status === 'approved') { await enterApp(); }
-      else { S.loading = false; S.screen = 'pending'; render(); }
+      if (toran.status === 'approved') {
+        if (toran.is_admin) {
+          S.loading = false; S.pinInput = ''; S.pinConfirm = ''; S.pinError = '';
+          S.screen = toran.admin_pin ? 'enter_pin' : 'set_pin';
+          render();
+        } else { await enterApp(); }
+      } else { S.loading = false; S.screen = 'pending'; render(); }
     } else {
       const existing = await api.getAllToranim();
       const isFirst = !existing || existing.length === 0;
       const created = await api.insertToran({ name: name, phone: phone, status: isFirst ? 'approved' : 'pending', is_admin: isFirst });
       S.currentUser = created;
-      if (isFirst) { await enterApp(); }
-      else { S.loading = false; S.screen = 'pending'; render(); }
+      if (isFirst) {
+        S.loading = false; S.pinInput = ''; S.pinConfirm = ''; S.pinError = '';
+        S.screen = 'set_pin'; render();
+      } else { S.loading = false; S.screen = 'pending'; render(); }
     }
   } catch (e) {
     S.loading = false; S.loginError = 'שגיאה בהתחברות: ' + e.message; render();
   }
 }
 
-/* ---------- מסך המתנה לאישור ---------- */
+/* ---------- מסך הגדרת PIN ראשונית ---------- */
+function renderSetPinScreen() {
+  return '<div class="center-screen"><div class="card auth-card">'
+    + '<div class="auth-eyebrow">הגדרת קוד מנהל</div>'
+    + '<h1 class="auth-title">ברוך הבא, ' + esc(S.currentUser.name) + '</h1>'
+    + '<p class="auth-sub">בתור מנהל, הגדירו קוד 4 ספרות שתזינו בכל כניסה. מי שלא יודע את הקוד ייכנס כמשתמש רגיל.</p>'
+    + '<div class="auth-field"><label class="field-label">קוד חדש (4 ספרות)</label>'
+      + '<input class="text-input" type="password" inputmode="numeric" maxlength="4" value="' + esc(S.pinInput) + '" oninput="S.pinInput=this.value.replace(/\\D/g,\'\').slice(0,4)" placeholder="• • • •"></div>'
+    + '<div class="auth-field"><label class="field-label">אימות קוד</label>'
+      + '<input class="text-input" type="password" inputmode="numeric" maxlength="4" value="' + esc(S.pinConfirm) + '" oninput="S.pinConfirm=this.value.replace(/\\D/g,\'\').slice(0,4)" onkeydown="if(event.key===\'Enter\')submitSetPin()" placeholder="• • • •"></div>'
+    + (S.pinError ? '<div class="error-text">' + esc(S.pinError) + '</div>' : '')
+    + '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;" onclick="submitSetPin()">שמירת קוד וכניסה</button>'
+    + '<button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:8px;" onclick="enterAppWithoutAdmin()">כניסה ללא קוד (כמשתמש רגיל)</button>'
+  + '</div></div>';
+}
+async function submitSetPin() {
+  if (S.pinInput.length !== 4) { S.pinError = 'הקוד חייב להיות בדיוק 4 ספרות'; render(); return; }
+  if (S.pinInput !== S.pinConfirm) { S.pinError = 'הקודים אינם תואמים'; render(); return; }
+  S.pinError = ''; S.loading = true; render();
+  try {
+    await api.updateToran(S.currentUser.id, { admin_pin: S.pinInput });
+    S.currentUser.admin_pin = S.pinInput;
+    await enterApp();
+  } catch(e) { S.loading = false; S.pinError = 'שגיאה בשמירת הקוד: ' + e.message; render(); }
+}
+
+/* ---------- מסך אימות PIN קיים ---------- */
+function renderEnterPinScreen() {
+  return '<div class="center-screen"><div class="card auth-card">'
+    + '<div class="auth-eyebrow">אימות מנהל</div>'
+    + '<h1 class="auth-title">שלום, ' + esc(S.currentUser.name) + '</h1>'
+    + '<p class="auth-sub">הזינו את קוד המנהל שלכם. קוד שגוי יכניס אתכם כמשתמש רגיל.</p>'
+    + '<div class="auth-field"><label class="field-label">קוד מנהל (4 ספרות)</label>'
+      + '<input class="text-input" type="password" inputmode="numeric" maxlength="4" value="' + esc(S.pinInput) + '" oninput="S.pinInput=this.value.replace(/\\D/g,\'\').slice(0,4)" onkeydown="if(event.key===\'Enter\')submitEnterPin()" placeholder="• • • •" autofocus></div>'
+    + (S.pinError ? '<div class="error-text">' + esc(S.pinError) + '</div>' : '')
+    + '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;" onclick="submitEnterPin()">כניסה</button>'
+  + '</div></div>';
+}
+function submitEnterPin() {
+  if (S.pinInput === S.currentUser.admin_pin) {
+    enterApp();
+  } else {
+    /* קוד שגוי — כניסה כמשתמש רגיל ללא הרשאות מנהל */
+    enterAppWithoutAdmin();
+  }
+}
+async function enterAppWithoutAdmin() {
+  S.currentUser = Object.assign({}, S.currentUser, { is_admin: false });
+  await enterApp();
+}
+
+function logout() {
+  S.currentUser = null; S.toranim = []; S.assignments = {}; S.modalDate = null;
+  S.adminOpen = false; S.banners = []; S.loginName = ''; S.loginPhone = ''; S.loginError = '';
+  S.folderOpen = false; S.quickAssignToranId = null; S.pinInput = ''; S.pinConfirm = ''; S.pinError = '';
+  S.screen = 'login'; render();
+}
 function renderPendingScreen() {
   return '<div class="center-screen"><div class="card auth-card" style="text-align:center;">'
     + '<div class="auth-eyebrow">ממתין לאישור</div>'
@@ -531,13 +597,6 @@ function renderPendingScreen() {
     + '<p class="auth-sub">הבקשה שלך נקלטה וממתינה לאישור מנהל. ברגע שתאושר תוכל/י להיכנס ולראות את לוח השיבוצים.</p>'
     + '<button class="btn btn-ghost" onclick="logout()">חזרה למסך הכניסה</button>'
   + '</div></div>';
-}
-
-function logout() {
-  S.currentUser = null; S.toranim = []; S.assignments = {}; S.modalDate = null;
-  S.adminOpen = false; S.banners = []; S.loginName = ''; S.loginPhone = ''; S.loginError = '';
-  S.folderOpen = false; S.quickAssignToranId = null;
-  S.screen = 'login'; render();
 }
 
 /* ---------- כניסה לאפליקציה: טעינת נתונים ---------- */
@@ -554,7 +613,15 @@ async function enterApp() {
 async function loadToranim() { S.toranim = await api.getAllToranim() || []; }
 async function loadMonth(y, m) {
   const start = ymd(y, m, 1), end = ymd(y, m, daysInGregMonth(y, m));
-  const rows = await api.getAssignmentsRange(start, end) || [];
+  let rows = [];
+  try {
+    rows = await api.getAssignmentsRange(start, end) || [];
+  } catch(e) {
+    /* עמודת swap_requested אולי עוד לא נוצרה — ננסה שאילתה פשוטה יותר */
+    try {
+      rows = await sb('assignments?select=id,date,toran_id,created_at,toranim(id,name,phone)&date=gte.' + start + '&date=lte.' + end + '&order=date.asc') || [];
+    } catch(e2) { rows = []; }
+  }
   S.assignments = {};
   rows.forEach(function (r) {
     if (!S.assignments[r.date]) S.assignments[r.date] = [];
@@ -799,14 +866,19 @@ function updateAssignSuggestions(val) {
 }
 async function assignToran(toranId) {
   const dateStr = S.modalDate;
+  const already = (S.assignments[dateStr] || []).some(function (a) { return a.toran_id === toranId; });
+  if (already) { alert('תורן זה כבר משובץ ביום זה'); return; }
   try {
     const created = await api.insertAssignment(dateStr, toranId);
     const t = S.toranim.find(function (x) { return x.id === toranId; });
     if (!S.assignments[dateStr]) S.assignments[dateStr] = [];
-    S.assignments[dateStr].push({ id: created.id, toran_id: toranId, name: t.name, created_at: created.created_at });
+    S.assignments[dateStr].push({ id: created.id, toran_id: toranId, name: t.name, created_at: created.created_at, swap_requested: false });
     S.assignQuery = '';
     render();
-  } catch (e) { alert('שגיאה בשיבוץ: ' + e.message); }
+  } catch (e) {
+    const msg = e.message && e.message.indexOf('duplicate') !== -1 ? 'תורן זה כבר משובץ ביום זה' : 'שגיאה בשיבוץ: ' + e.message;
+    alert(msg);
+  }
 }
 async function removeAssignment(id) {
   const dateStr = S.modalDate;
