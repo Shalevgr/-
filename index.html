@@ -286,7 +286,7 @@ const api = {
   updateAssignment: (id, data) => sb('assignments?id=eq.' + id, { method: 'PATCH', body: data }).then(r => r && r[0]),
   deleteAssignment: (id) => sb('assignments?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }),
   countToranim: () => sb('toranim?select=id', { headers: { 'Prefer': 'count=exact' } }),
-  getAssignmentsForCount: (startYmd, beforeYmd) => sb('assignments?select=toran_id&date=gte.' + startYmd + '&date=lt.' + beforeYmd)
+  getAssignmentsForCount: (startYmd, endYmd) => sb('assignments?select=toran_id&date=gte.' + startYmd + '&date=lte.' + endYmd)
 };
 
 /* =========================================================================
@@ -343,22 +343,39 @@ function rdToHebrew(rd) {
 }
 function gregorianToHebrew(y, m, d) { return rdToHebrew(gregorianToRD(y, m, d)); }
 
-function findGregorianStartOfHebrewYear(targetHebYear) {
-  /* מאתר את התאריך הלועזי של א' תשרי לשנה העברית הנתונה, על ידי סריקה של
-     החלון הלועזי (אוגוסט–אוקטובר) שבו ראש השנה תמיד חל, תוך שימוש בפונקציות
-     ההמרה שכבר אומתו למעלה. */
-  const candidates = [targetHebYear - 3761, targetHebYear - 3760];
-  for (let ci = 0; ci < candidates.length; ci++) {
-    const gy = candidates[ci];
-    for (let gm = 8; gm <= 10; gm++) {
-      const days = daysInGregMonth(gy, gm);
-      for (let gd = 1; gd <= days; gd++) {
-        const h = gregorianToHebrew(gy, gm, gd);
-        if (h.year === targetHebYear && h.month === 7 && h.day === 1) return ymd(gy, gm, gd);
-      }
-    }
+/* המרה הפוכה: תאריך עברי → תאריך לועזי (O(1) — ישיר דרך מספרי RD) */
+function hebrewToRD(hebYear, hebMonth, hebDay) {
+  const monthOrder = hebrewLeapYear(hebYear) ? [7,8,9,10,11,12,13,1,2,3,4,5,6] : [7,8,9,10,11,12,1,2,3,4,5,6];
+  let rd = HEBREW_EPOCH + hebrewCalendarElapsedDays(hebYear);
+  for (let i = 0; i < monthOrder.length; i++) {
+    if (monthOrder[i] === hebMonth) break;
+    rd += hebrewMonthLength(hebYear, monthOrder[i]);
   }
-  return null;
+  return rd + hebDay - 1;
+}
+function rdToGregorian(rd) {
+  let year = Math.floor(rd / 365.2425);
+  while (gregorianToRD(year + 1, 1, 1) <= rd) year++;
+  while (gregorianToRD(year, 1, 1) > rd) year--;
+  let month = 1;
+  while (month < 12 && gregorianToRD(year, month + 1, 1) <= rd) month++;
+  return ymd(year, month, rd - gregorianToRD(year, month, 1) + 1);
+}
+function hebrewToGregorian(hebYear, hebMonth, hebDay) {
+  return rdToGregorian(hebrewToRD(hebYear, hebMonth, hebDay));
+}
+
+/* מחשב את טווח הספירה: א' אלול שנה Y עד כ' אב שנה Y+1 */
+function getCountingCycleRange() {
+  const t = new Date();
+  const hToday = gregorianToHebrew(t.getFullYear(), t.getMonth() + 1, t.getDate());
+  /* אלול = חודש 6; אם היום לפני אלול — המחזור התחיל בשנה העברית הקודמת */
+  const cycleYear = hToday.month >= 6 ? hToday.year : hToday.year - 1;
+  const startYmd = hebrewToGregorian(cycleYear, 6, 1);      /* א' אלול */
+  const endYmd   = hebrewToGregorian(cycleYear + 1, 5, 20); /* כ' אב */
+  const label    = 'א׳ אלול ' + hebrewGematria(cycleYear % 1000)
+                 + ' – כ׳ אב '   + hebrewGematria((cycleYear + 1) % 1000);
+  return { startYmd: startYmd, endYmd: endYmd, label: label };
 }
 
 const HEBREW_MONTH_NAMES = {1:'ניסן',2:'אייר',3:'סיון',4:'תמוז',5:'אב',6:'אלול',7:'תשרי',8:'חשון',9:'כסלו',10:'טבת',11:'שבט',12:'אדר',13:"אדר ב׳"};
@@ -437,7 +454,7 @@ const S = {
   dismissedBanners: {},
   adminOpen: false,
   newToranName: '', newToranPhone: '',
-  folderOpen: false, folderLoading: false, folderData: null, folderError: null,
+  folderOpen: false, folderLoading: false, folderData: null, folderError: null, folderCycleLabel: '',
   quickAssignToranId: null
 };
 
@@ -695,7 +712,6 @@ async function goToday() {
 
 /* ---------- מודאל שיבוץ יום ---------- */
 function openDay(dateStr) {
-  if (S.quickAssignToranId) { quickAssignToDay(dateStr); return; }
   S.modalDate = dateStr; S.assignQuery = ''; render();
 }
 function closeModal() { S.modalDate = null; render(); }
@@ -705,15 +721,16 @@ async function quickAssignToDay(dateStr) {
   const toranId = S.quickAssignToranId;
   const t = S.toranim.find(function (x) { return x.id === toranId; });
   if (!t) { S.quickAssignToranId = null; render(); return; }
+  const already = (S.assignments[dateStr] || []).some(function (a) { return a.toran_id === toranId; });
+  if (already) { alert(t.name + ' כבר משובץ/צת ביום זה'); return; }
   try {
     const created = await api.insertAssignment(dateStr, toranId);
     if (!S.assignments[dateStr]) S.assignments[dateStr] = [];
     S.assignments[dateStr].push({ id: created.id, toran_id: toranId, name: t.name, created_at: created.created_at, swap_requested: false });
     S.quickAssignToranId = null;
+    S.modalDate = null;
     render();
-  } catch (e) {
-    alert('שגיאה בשיבוץ: ' + e.message + ' — נסו תאריך אחר');
-  }
+  } catch (e) { alert('שגיאה בשיבוץ: ' + e.message + ' — נסו תאריך אחר'); }
 }
 
 function renderModal() {
@@ -721,6 +738,19 @@ function renderModal() {
   const list = S.assignments[dateStr] || [];
   const isAdmin = S.currentUser.is_admin;
   const isFutureOrToday = dateStr >= todayYMD();
+
+  /* כפתור שיבוץ מהיר מהתיקייה — מופיע בראש המודאל אם מצב שיבוץ מהיר פעיל */
+  let quickAssignHtml = '';
+  if (S.quickAssignToranId && isAdmin) {
+    const qt = S.toranim.find(function (x) { return x.id === S.quickAssignToranId; });
+    if (qt) {
+      quickAssignHtml = '<div class="banner" style="margin-bottom:14px;justify-content:space-between;">'
+        + '<span>שיבוץ מהיר: <b>' + esc(qt.name) + '</b></span>'
+        + '<button class="btn btn-confirm btn-sm" onclick="quickAssignToDay(\'' + dateStr + '\')">שבץ ביום זה</button>'
+        + '</div>';
+    }
+  }
+
   const rowsHtml = list.length ? list.map(function (a) {
     const isMine = a.toran_id === S.currentUser.id;
     let actionBtns = '';
@@ -735,19 +765,23 @@ function renderModal() {
     const swapTag = a.swap_requested ? ' <span class="pill pill-wait">מחפש/ת מחליף</span>' : '';
     return '<div class="assigned-row"><span>' + esc(a.name) + swapTag + '</span><span class="row-actions">' + actionBtns + '</span></div>';
   }).join('') : '<div class="empty-note">אין עדיין תורנים משובצים ליום זה</div>';
+
   let assignBoxHtml;
   if (isAdmin) {
     assignBoxHtml = '<label class="field-label">הוספת תורן</label>'
       + '<div class="assign-box"><input class="text-input" placeholder="הקלידו שם תורן רשום..." oninput="updateAssignSuggestions(this.value)" autocomplete="off">'
       + '<div id="assign-suggestions-slot"></div></div>';
+  } else if (!isFutureOrToday) {
+    assignBoxHtml = '<div class="empty-note-sm" style="color:var(--ink-muted)">יום זה כבר עבר — לא ניתן לבקש החלפות על משמרות שעברו.</div>';
   } else {
     assignBoxHtml = '<div class="empty-note-sm">רק מנהלים יכולים לשבץ תורנים ליום זה.</div>';
   }
+
   return '<div class="modal-overlay" onclick="if(event.target===this)closeModal()">'
     + '<div class="modal-box">'
       + '<div class="modal-head"><div><div class="g-date">' + formatGregFull(dateStr) + '</div><div class="h-date">' + formatHebFull(dateStr) + '</div></div>'
         + '<button class="modal-close" onclick="closeModal()" aria-label="סגירה">✕</button></div>'
-      + '<div class="modal-body"><div class="assigned-list">' + rowsHtml + '</div>' + assignBoxHtml + '</div>'
+      + '<div class="modal-body">' + quickAssignHtml + '<div class="assigned-list">' + rowsHtml + '</div>' + assignBoxHtml + '</div>'
     + '</div></div>';
 }
 function updateAssignSuggestions(val) {
@@ -901,11 +935,10 @@ function closeFolder() { S.folderOpen = false; render(); }
 async function loadFolderData() {
   S.folderLoading = true; render();
   try {
-    const t = new Date();
-    const hToday = gregorianToHebrew(t.getFullYear(), t.getMonth() + 1, t.getDate());
-    const yearStart = findGregorianStartOfHebrewYear(hToday.year);
-    const todayStr = todayYMD();
-    const rows = await api.getAssignmentsForCount(yearStart, todayStr) || [];
+    const cycle = getCountingCycleRange();
+    S.folderCycleLabel = cycle.label;
+    /* ספירה של כל המשמרות בטווח — כולל עתידיות (דינמי: אם משמרת בוטלה/הוחלפה, יורד אוטומטית) */
+    const rows = await api.getAssignmentsForCount(cycle.startYmd, cycle.endYmd) || [];
     const counts = {};
     rows.forEach(function (r) { counts[r.toran_id] = (counts[r.toran_id] || 0) + 1; });
     const approved = S.toranim.filter(function (t) { return t.status === 'approved'; });
@@ -930,7 +963,7 @@ function renderFolderPanel() {
   return '<div class="admin-overlay" onclick="if(event.target===this)closeFolder()">'
     + '<div class="admin-panel">'
       + '<div class="admin-head"><h2>תיקיית תורנים</h2><button class="modal-close" onclick="closeFolder()" aria-label="סגירה">✕</button></div>'
-      + '<div class="admin-section"><h3>מספר משמרות שבוצעו השנה (שנה עברית נוכחית), מהגבוה לנמוך</h3>' + body + '</div>'
+      + '<div class="admin-section"><h3>משמרות ' + esc(S.folderCycleLabel || '') + ' (כולל עתידיות)</h3>' + body + '</div>'
     + '</div></div>';
 }
 
