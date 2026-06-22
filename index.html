@@ -442,7 +442,7 @@ function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replac
 const S = {
   screen: IS_CONFIGURED ? 'login' : 'config',
   loading: false,
-  loginName: '', loginPhone: '', loginError: '',
+  loginName: '', loginPhone: '', loginError: '', rememberMe: false,
   currentUser: null,
   pinInput: '', pinConfirm: '', pinError: '',
   toranim: [],
@@ -495,6 +495,9 @@ function renderLoginScreen() {
       + '<input class="text-input" type="text" value="' + esc(S.loginName) + '" oninput="S.loginName=this.value" placeholder="לדוגמה: ישראל ישראלי"></div>'
     + '<div class="auth-field"><label class="field-label">מספר טלפון</label>'
       + '<input class="text-input" type="tel" value="' + esc(S.loginPhone) + '" oninput="S.loginPhone=this.value" onkeydown="if(event.key===\'Enter\')submitLogin()" placeholder="050-1234567"></div>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;margin-bottom:4px;">'
+      + '<input type="checkbox" ' + (S.rememberMe ? 'checked' : '') + ' onchange="S.rememberMe=this.checked"> זכור אותי במכשיר זה'
+    + '</label>'
     + (S.loginError ? '<div class="error-text">' + esc(S.loginError) + '</div>' : '')
     + '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;" onclick="submitLogin()" ' + (S.loading ? 'disabled' : '') + '>'
       + (S.loading ? '<span class="spinner"></span> מתחבר...' : 'כניסה')
@@ -508,6 +511,11 @@ async function submitLogin() {
   if (!name || phone.length < 9) { S.loginError = 'נא להזין שם מלא ומספר טלפון תקינים'; render(); return; }
   S.loginError = ''; S.loading = true; render();
   try {
+    if (S.rememberMe) {
+      localStorage.setItem('kitchen_roster_remember', JSON.stringify({ name: name, phone: S.loginPhone.trim() }));
+    } else {
+      localStorage.removeItem('kitchen_roster_remember');
+    }
     let toran = await api.getToranByPhone(phone);
     if (toran) {
       S.currentUser = toran;
@@ -676,6 +684,7 @@ function renderHeader() {
       + '<div class="header-user">' + (S.currentUser.is_admin ? '<span class="admin-tag">מנהל</span>' : '') + '<b>' + esc(S.currentUser.name) + '</b></div>'
       + (S.currentUser.is_admin ? '<button class="btn btn-ghost btn-sm" onclick="openAdmin()">ניהול</button>' : '')
       + (S.currentUser.is_admin ? '<button class="btn btn-ghost btn-sm" onclick="openFolder()">תיקיית תורנים</button>' : '')
+      + '<button class="btn btn-ghost btn-sm" onclick="refreshApp()" title="רענון נתונים">↻</button>'
       + '<button class="btn btn-ghost btn-sm" onclick="logout()">יציאה</button>'
     + '</div>'
   + '</header>';
@@ -1047,9 +1056,29 @@ document.addEventListener('click', function (e) {
     if (slot) slot.innerHTML = '';
   }
 });
+async function refreshApp() {
+  if (S.screen !== 'app') return;
+  await loadToranim();
+  await loadMonth(S.viewYear, S.viewMonth);
+  await computeBanners();
+  render();
+}
+
 function init() {
   const t = new Date();
   S.viewYear = t.getFullYear(); S.viewMonth = t.getMonth() + 1;
+  /* טעינת פרטים שמורים אם המשתמש סימן "זכור אותי" */
+  try {
+    const saved = localStorage.getItem('kitchen_roster_remember');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.name && parsed.phone) {
+        S.loginName = parsed.name;
+        S.loginPhone = parsed.phone;
+        S.rememberMe = true;
+      }
+    }
+  } catch(e) {}
   render();
 }
 document.addEventListener('DOMContentLoaded', init);
