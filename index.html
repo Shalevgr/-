@@ -1025,7 +1025,7 @@ async function loadFolderData() {
     const approved = S.toranim.filter(function (t) { return t.status === 'approved'; });
     S.folderData = approved.map(function (t) {
       return { id: t.id, name: t.name, phone: t.phone, count: counts[t.id] || 0 };
-    }).sort(function (a, b) { return b.count - a.count; });
+    }).sort(function (a, b) { return a.count - b.count; });
   } catch (e) {
     S.folderError = e.message;
   }
@@ -1044,7 +1044,7 @@ function renderFolderPanel() {
   return '<div class="admin-overlay" onclick="if(event.target===this)closeFolder()">'
     + '<div class="admin-panel">'
       + '<div class="admin-head"><h2>תיקיית תורנים</h2><button class="modal-close" onclick="closeFolder()" aria-label="סגירה">✕</button></div>'
-      + '<div class="admin-section"><h3>משמרות ' + esc(S.folderCycleLabel || '') + ' (כולל עתידיות)</h3>' + body + '</div>'
+      + '<div class="admin-section"><h3>משמרות ' + esc(S.folderCycleLabel || '') + ' — מהכי פחות לכי יותר</h3>' + body + '</div>'
     + '</div></div>';
 }
 
